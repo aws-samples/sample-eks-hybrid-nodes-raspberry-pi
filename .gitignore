@@ -1,0 +1,42 @@
+# Pem Files
+*.pem
+
+# Local .terraform directories
+**/.terraform/*
+
+# State files
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Sensitive data files
+*.tfvars
+*.tfvars.json
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI configuration files
+.terraformrc
+terraform.rc
+
+# Provider lock file
+.terraform.lock.hcl
+
+# macOS system files
+.DS_Store
+
+# Ignore CLI configuration files
+.terraformrc
+terraform.rc
+
+# Ignore files Generated:
+**/cilium-values.yaml
+**/SETUP_NODE.md
+**/SETUP_VPN.md
