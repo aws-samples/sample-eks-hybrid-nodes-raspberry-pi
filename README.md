@@ -64,16 +64,17 @@ Our goal is to showcase that setting up hybrid nodes doesn't need to be complex 
 - [kubectl](https://kubernetes.io/docs/tasks/tools/)
 - [terraform](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli)
 
+> **Important IAM Requirements:**
+> - An IAM role named `Admin` must exist in your AWS account
+> - This role will be granted cluster admin permissions through the `AmazonEKSClusterAdminPolicy`
+> - If you want to use a different role name, modify the `principal_arn` in `terraform/eks.tf`
+
 ---
 
 ## Getting Started
 
 Clone the repository:
 
-```bash
-git clone https://github.com/aws-samples/sample-eks-hybrid-nodes-raspberry-pi.git
-cd sample-eks-hybrid-nodes-raspberry-pi
-```
 
 ---
 
@@ -81,7 +82,10 @@ cd sample-eks-hybrid-nodes-raspberry-pi
 
 ### 1. AWS Infrastructure Setup
 
-> **Note:** This demo uses the `ap-southeast-1` (Singapore) region. If you need to use a different region, modify the region variable in your terraform configuration.
+> **Note:** This demo uses the `ap-southeast-1` (Singapore) region by default. To use a different region:
+> 1. Open `terraform/variables.tf`
+> 2. Locate the `region` variable
+> 3. Change the default value to your desired AWS region (e.g., `us-west-2`, `eu-west-1`)
 
 ```bash
 # Deploy AWS infrastructure using Terraform
@@ -92,6 +96,16 @@ terraform apply --auto-approve
 
 $(terraform output -raw eks_update_kubeconfig)
 ```
+
+> **Note on Admin Access:** If you encounter permission errors and don't have an Admin role, you can remove the admin access configuration:
+> ```bash
+> # Remove admin access configuration from eks.tf
+> sed -i '29,39d' eks.tf
+> 
+> # Reapply terraform to update the configuration
+> terraform apply --auto-approve
+> ```
+> This will use only the cluster creator permissions, which are sufficient if you created the cluster yourself.
 
 **Terraform Output Files:**
 - `SETUP_VPN.md`: Steps to setup Wireguard on vpn_server
