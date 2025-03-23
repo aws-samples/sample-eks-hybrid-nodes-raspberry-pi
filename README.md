@@ -267,6 +267,33 @@ kubectl get pods -A
 
 ---
 
+## Deploy Demo Application
+
+After your hybrid node is successfully connected, you can deploy a sample application to test it:
+
+```bash
+# Deploy the 2048 game demo
+kubectl apply -f terraform/demo.yaml
+
+# Wait for pods to be ready
+kubectl -n game-2048 get pods -w
+```
+
+Once all pods are running, you can access the 2048 game:
+1. Get your Raspberry Pi's IP address (if you don't already know it):
+   ```bash
+   hostname -I | awk '{print $1}'
+   ```
+2. Open a web browser and navigate to:
+   ```
+   http://<raspberry-pi-ip>:30080
+   ```
+   > **Note:** You must be on the same network as your Raspberry Pi to access this URL.
+
+You should see the 2048 game running on your hybrid EKS cluster!
+
+---
+
 ## Clean Up
 
 ### 1. Remove Node from Cluster
