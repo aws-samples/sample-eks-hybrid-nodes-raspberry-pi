@@ -1,0 +1,54 @@
+# Data Processor Deployment (Cloud)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-processor
+  namespace: hybrid-pipeline-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data-processor
+  template:
+    metadata:
+      labels:
+        app: data-processor
+    spec:
+      nodeSelector:
+        topology.kubernetes.io/region: ap-southeast-1
+        kubernetes.io/arch: arm64
+      tolerations:
+      - key: "arm64"
+        value: "true"
+        effect: "NoSchedule"
+      containers:
+      - name: data-processor
+        image: public.ecr.aws/v2f5y6u4/hybrid/pipeline-processor:latest
+        imagePullPolicy: Always
+        env:
+        - name: REDIS_HOST
+          value: "redis-service"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: PROCESSING_WINDOW
+          value: "10"  # Process data in 10-second windows
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "500m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+---
+# Data Processor Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-processor-service
+  namespace: hybrid-pipeline-demo
+spec:
+  selector:
+    app: data-processor
+  ports:
+  - port: 8080
+    targetPort: 8080

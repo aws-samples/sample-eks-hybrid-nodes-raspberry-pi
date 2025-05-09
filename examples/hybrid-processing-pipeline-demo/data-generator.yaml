@@ -1,0 +1,49 @@
+# Data Generator Deployment (Pi)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-generator
+  namespace: hybrid-pipeline-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data-generator
+  template:
+    metadata:
+      labels:
+        app: data-generator
+    spec:
+      nodeSelector:
+        eks.amazonaws.com/compute-type: hybrid
+      containers:
+      - name: data-generator
+        image: public.ecr.aws/v2f5y6u4/hybrid/pipeline-generator:latest
+        imagePullPolicy: Always
+        env:
+        - name: REDIS_HOST
+          value: "redis-service"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: SENSOR_INTERVAL
+          value: "1"  # Generate data every 1 second
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+---
+# Data Generator Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-generator-service
+  namespace: hybrid-pipeline-demo
+spec:
+  selector:
+    app: data-generator
+  ports:
+  - port: 8080
+    targetPort: 8080

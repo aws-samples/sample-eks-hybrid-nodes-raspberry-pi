@@ -1,5 +1,14 @@
+locals {
+  account_id = data.aws_caller_identity.current.account_id
+}
+
 provider "aws" {
   region = var.region
+}
+
+provider "aws" {
+  alias  = "ecr"
+  region = "us-east-1"
 }
 
 provider "kubernetes" {
@@ -42,3 +51,7 @@ data "aws_availability_zones" "available" {
   }
 }
 
+
+data "aws_ecrpublic_authorization_token" "token" {
+  provider = aws.ecr
+}

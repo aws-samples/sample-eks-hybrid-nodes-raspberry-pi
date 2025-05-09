@@ -25,6 +25,32 @@ module "eks" {
   subnet_ids = module.vpc.private_subnets
 
   enable_cluster_creator_admin_permissions = true
+    eks_managed_node_groups = {
+    karpenter = {
+      ami_type       = "BOTTLEROCKET_x86_64"
+      instance_types = ["m5.large"]
+
+      min_size     = 2
+      max_size     = 2
+      desired_size = 2
+
+      labels = {
+        # Used to ensure Karpenter runs on nodes that it does not manage
+        "karpenter.sh/controller" = "true"
+      }
+
+      taints = {
+        # The pods that do not tolerate this taint should run on nodes
+        # created by Karpenter
+        karpenter = {
+          key    = "karpenter.sh/controller"
+          value  = "true"
+          effect = "NO_SCHEDULE"
+        }
+      }
+    }
+  }
+
   access_entries = {
     admin = {
       principal_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/Admin"
@@ -48,7 +74,6 @@ module "eks" {
     remote_pod_networks  = { cidrs = [var.remote_pod_cidr] }
   }
 
-  create_node_security_group = false
   cluster_security_group_additional_rules = {
     hybrid = {
       cidr_blocks = [var.vpc_cidr, var.remote_node_cidr, var.remote_pod_cidr]
@@ -59,4 +84,15 @@ module "eks" {
       type        = "ingress"
     }
   }
+  create_node_security_group = false
+}
+
+# Allow all traffic from VPN server security group to cluster primary security group
+resource "aws_security_group_rule" "vpn_to_cluster_primary" {
+  type                     = "ingress"
+  from_port               = 0
+  to_port                 = 0
+  protocol                = "-1"
+  source_security_group_id = module.security_group.security_group_id
+  security_group_id       = module.eks.cluster_primary_security_group_id
 }

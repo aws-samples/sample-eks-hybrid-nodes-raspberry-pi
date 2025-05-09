@@ -40,3 +40,9 @@ terraform.rc
 **/cilium-values.yaml
 **/SETUP_NODE.md
 **/SETUP_VPN.md
+**/karpenter.yaml
+**/frontend
+**/api
+**/data-processor
+**/data-generator
+**/dashboard

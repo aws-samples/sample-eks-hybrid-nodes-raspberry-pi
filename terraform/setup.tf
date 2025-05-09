@@ -1,9 +1,15 @@
+resource "null_resource" "create_generated-files_dir" {
+  provisioner "local-exec" {
+    command = "mkdir -p ${path.module}/generated-files"
+  }
+}
+
 resource "local_file" "setup_vpn" {
   content = templatefile("${path.module}/templates/SETUP_VPN.md.tpl", {
     remote_node_cidr = var.remote_node_cidr
     remote_pod_cidr  = var.remote_pod_cidr
   })
-  filename = "${path.module}/SETUP_VPN.md"
+  filename = "${path.module}/generated-files/SETUP_VPN.md"
 }
 
 resource "local_file" "setup_node" {
@@ -14,7 +20,7 @@ resource "local_file" "setup_node" {
     activation_id   = aws_ssm_activation.this.id
     version = var.eks_cluster_version
   })
-  filename = "${path.module}/SETUP_NODE.md"
+  filename = "${path.module}/generated-files/SETUP_NODE.md"
 }
 
 resource "local_file" "setup_cilium" {
@@ -22,5 +28,12 @@ resource "local_file" "setup_cilium" {
     remote_pod_cidr  = var.remote_pod_cidr
     k8s_service_host = trimprefix(module.eks.cluster_endpoint, "https://")
   })
-  filename = "${path.module}/cilium-values.yaml"
+  filename = "${path.module}/generated-files/cilium-values.yaml"
+}
+
+resource "local_file" "setup_karpenter" {
+  content = templatefile("${path.module}/templates/karpenter.yaml.tpl", {
+    cluster_name    = module.eks.cluster_name
+  })
+  filename = "${path.module}/generated-files/karpenter.yaml"
 }

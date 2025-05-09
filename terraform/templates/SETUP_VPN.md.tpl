@@ -21,7 +21,7 @@ sudo cat /etc/wireguard/client-private.key | wg pubkey | sudo tee /etc/wireguard
 sudo bash -c 'private_key=$(cat /etc/wireguard/private.key); cat > /etc/wireguard/wg0.conf << EOF
 [Interface]
 PrivateKey = $private_key
-Address = 172.16.0.1/24
+Address = 10.200.0.1/24
 ListenPort = 51820
 SaveConfig = true
 EOF'
@@ -29,12 +29,13 @@ EOF'
 
 - Setup IP table and route
 ```
+echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+
+# Configure iptables for forwarding and NAT
 sudo iptables -A FORWARD -i wg0 -j ACCEPT
 sudo iptables -A FORWARD -o wg0 -j ACCEPT
 sudo iptables -t nat -A POSTROUTING -o ens5 -j MASQUERADE
-
-echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
-sudo sysctl -p
 ```
 
 - Start Wireguard

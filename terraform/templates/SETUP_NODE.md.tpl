@@ -5,6 +5,8 @@
 sudo su ubuntu
 cd ~
 
+sudo snap install aws-cli --classic
+
 sudo snap remove amazon-ssm-agent
 wget https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_arm64/amazon-ssm-agent.deb
 sudo dpkg -i amazon-ssm-agent.deb
@@ -25,6 +27,9 @@ spec:
   cluster:
     name: ${cluster_name}
     region: ${region}
+  kubelet:
+    flags:
+      - --node-labels=topology.kubernetes.io/zone=onprem
   hybrid: 
     ssm:
       activationCode: ${activation_code}

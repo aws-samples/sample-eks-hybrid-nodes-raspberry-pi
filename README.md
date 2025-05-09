@@ -52,10 +52,11 @@ Our goal is to showcase that setting up hybrid nodes doesn't need to be complex 
 ## Prerequisites
 
 ### Hardware Requirements
-- **Raspberry Pi 4** (2GB+ RAM)
+- **Raspberry Pi 4** or **Raspberry Pi 5**
+  > **Note on EKS Version Compatibility:**
+  > - Should also work with any device running ARM but no guarantees
 - Network connectivity (WiFi/Ethernet)
 - SSH access configured
-- Ubuntu Server 22.04 LTS (ARM64)
 
 ### Software Requirements
 > Ensure you have the following tools installed:
@@ -74,7 +75,9 @@ Our goal is to showcase that setting up hybrid nodes doesn't need to be complex 
 ## Getting Started
 
 Clone the repository:
-
+```bash
+git clone https://github.com/aws-samples/sample-eks-hybrid-nodes-raspberry-pi.git
+```
 
 ---
 
@@ -82,10 +85,20 @@ Clone the repository:
 
 ### 1. AWS Infrastructure Setup
 
-> **Note:** This demo uses the `ap-southeast-1` (Singapore) region by default. To use a different region:
+> **Important Configuration Notes:**
+> 
+> **Region Selection:**
+> This demo uses the `ap-southeast-1` (Singapore) region by default. To use a different region:
 > 1. Open `terraform/variables.tf`
 > 2. Locate the `region` variable
 > 3. Change the default value to your desired AWS region (e.g., `us-west-2`, `eu-west-1`)
+>
+> **EKS Version:**
+> - Update in `terraform/variables.tf`
+> - However, need to be more than version 1.31
+>
+> **Network Configuration:**
+> Before proceeding, check your node IP CIDR and update the `remote_node_cidr` in `terraform/variables.tf` accordingly. The default is set to `192.168.3.0/24`.
 
 ```bash
 # Deploy AWS infrastructure using Terraform
@@ -115,6 +128,23 @@ $(terraform output -raw eks_update_kubeconfig)
 **Important Terraform Outputs:**
 - `eks_update_kubeconfig`: How to access cluster
 - `connect_vpn_server`: How to connect to vpn_server using SSM
+
+#### Setup Karpenter and Kube Proxy
+
+We shall use Karpenter to provision nodes on the Cloud. While, we need to setup Kube Proxy to run only on Cloud Nodes. Cilium will be used to proxy on the Hybrid Nodes.
+
+**Step 1:** Apply the Karpenter configuration:
+```bash
+kubectl apply -f generated-files/karpenter.yaml
+```
+
+**Step 2:** Configure Kube Proxy with the correct region affinity:
+```bash
+# Replace "ap-southeast-1" with your AWS region
+kubectl patch ds -n kube-system kube-proxy -p '{"spec": {"template": {"spec": {"affinity": {"nodeAffinity": {"requiredDuringSchedulingIgnoredDuringExecution": {"nodeSelectorTerms": [{"matchExpressions": [{"key": "topology.kubernetes.io/region", "operator": "In", "values": ["ap-southeast-1"]}]}]}}}}}}}'
+```
+
+> **Important:** Make sure to replace `ap-southeast-1` in the command above with the AWS region you're using for your deployment. This ensures that kube-proxy pods are scheduled only on nodes in your specific region.
 
 #### VPN Server Setup
 We use Wireguard for site-to-site VPN in this demo. This is how our EKS Cluster communicates with the Raspberry Pi.  
@@ -170,7 +200,7 @@ Add the following configuration (replace placeholders):
 ```ini
 [Interface]
 PrivateKey = <client-private.key>
-Address = 192.168.3.0/24
+Address = 10.200.0.2/24
 
 [Peer]
 # Public key from AWS server (/etc/wireguard/public.key)
@@ -178,7 +208,7 @@ PublicKey = <public.key>
 # Your EC2 instance's public IP
 Endpoint = <ec2-public-ip>:51820
 # AWS VPC CIDR and WireGuard server network
-AllowedIPs = 172.16.0.1/24,10.0.0.0/24
+AllowedIPs = 10.200.0.1/24,10.0.0.0/24
 PersistentKeepalive = 25
 ```
 
@@ -232,22 +262,111 @@ helm repo update
 3. **Install Cilium:**
 ```bash
 helm install cilium cilium/cilium \
-    --version 1.16.6 \
+    --version 1.17.1 \
     --namespace kube-system \
-    --values cilium-values.yaml
+    --values generated-files/cilium-values.yaml 
 ```
 
 4. **Configure CoreDNS:**
-If CoreDNS pods are not starting up properly, you can patch them to use the cluster endpoint:
+Wait for Cilium to be deployed (so that our Hybrid Node is in a Ready state)
 ```bash
 # First get the endpoint
 ENDPOINT=$(terraform output -raw eks_cluster_endpoint)
 
 # Then use it in the patch command
-kubectl -n kube-system patch deployment coredns --patch '{"spec":{"template":{"spec":{"containers":[{"name":"coredns","env":[{"name":"KUBERNETES_SERVICE_HOST","value":"'$ENDPOINT'"},{"name":"KUBERNETES_SERVICE_PORT","value":"443"}]}]}}}}'
-```
+cat << 'EOF' | kubectl patch deployment coredns -n kube-system --patch-file /dev/stdin
+{
+  "spec": {
+    "strategy": {
+      "rollingUpdate": {
+        "maxSurge": 0,
+        "maxUnavailable": 1
+      }
+    },
+    "replicas": 3,
+    "template": {
+      "spec": {
+        "affinity": {
+          "podAntiAffinity": {
+            "preferredDuringSchedulingIgnoredDuringExecution": [
+              {
+                "podAffinityTerm": {
+                  "labelSelector": {
+                    "matchExpressions": [
+                      {
+                        "key": "k8s-app",
+                        "operator": "In",
+                        "values": [
+                          "kube-dns"
+                        ]
+                      }
+                    ]
+                  },
+                  "topologyKey": "kubernetes.io/hostname"
+                },
+                "weight": 100
+              },
+              {
+                "podAffinityTerm": {
+                  "labelSelector": {
+                    "matchExpressions": [
+                      {
+                        "key": "k8s-app",
+                        "operator": "In",
+                        "values": [
+                          "kube-dns"
+                        ]
+                      }
+                    ]
+                  },
+                  "topologyKey": "topology.kubernetes.io/zone"
+                },
+                "weight": 50
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+EOF
 
-This configures CoreDNS to use the same endpoint as Cilium for API server communication.
+kubectl patch deployment coredns -n kube-system --patch '
+{
+  "spec": {
+    "template": {
+      "spec": {
+        "containers": [{
+          "name": "coredns",
+          "env": [
+            {
+              "name": "KUBERNETES_SERVICE_HOST",
+              "value": "'$ENDPOINT'"
+            },
+            {
+              "name": "KUBERNETES_SERVICE_PORT",
+              "value": "443"
+            }
+          ]
+        }]
+      }
+    }
+  }
+}'
+
+kubectl rollout restart deployment coredns -n kube-system
+```
+Do double check to see if there is a CoreDNS running on the Hybrid Node - if not delete one of the pods to let it be provisioned on the Hybrid Node.
+
+Finally, setup kube-dns:
+```bash
+kubectl patch svc kube-dns -n kube-system --type=merge -p '{
+  "spec": {
+    "trafficDistribution": "PreferClose"
+  }
+}'
+```
 
 ---
 
@@ -269,30 +388,24 @@ kubectl get pods -A
 
 ## Deploy Demo Application
 
-After your hybrid node is successfully connected, you can deploy a sample application to test it:
+After your hybrid node is successfully connected, you can try our demo applications:
 
-```bash
-# Deploy the 2048 game demo
-kubectl apply -f terraform/demo.yaml
+### 1. Latency Comparison Demo
+Try our [latency comparison demo](examples/latency-comparison-demo/README.md) which showcases the latency differences between pods running on AWS EKS cloud nodes versus pods running on Raspberry Pi hybrid nodes.
 
-# Wait for pods to be ready
-kubectl -n game-2048 get pods -w
-```
+### 2. Hybrid Processing Pipeline Demo
+Experience a real-world IoT scenario with our [hybrid processing pipeline demo](examples/hybrid-processing-pipeline-demo/README.md) that demonstrates:
+- Data generation at the edge (Raspberry Pi)
+- Cloud-based processing with Redis
+- Real-time visualization dashboard
+- Anomaly detection and statistical analysis
 
-Once all pods are running, you can access the 2048 game:
-1. Get your Raspberry Pi's IP address (if you don't already know it):
-   ```bash
-   hostname -I | awk '{print $1}'
-   ```
-2. Open a web browser and navigate to:
-   ```
-   http://<raspberry-pi-ip>:30080
-   ```
-   > **Note:** You must be on the same network as your Raspberry Pi to access this URL.
+This demo showcases how to effectively distribute workloads between edge devices and the cloud, with:
+- Edge-based data generation on the Pi
+- Cloud-based data processing for heavy computations
+- Real-time monitoring and visualization
+- Hybrid architecture leveraging both Pi and cloud resources
 
-You should see the 2048 game running on your hybrid EKS cluster!
-
----
 
 ## Clean Up
 

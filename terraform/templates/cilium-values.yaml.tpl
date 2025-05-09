@@ -14,9 +14,18 @@ ipam:
     clusterPoolIPv4PodCIDRList:
     - ${remote_pod_cidr}
 operator:
+  replicas: 1
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: eks.amazonaws.com/compute-type
+            operator: In
+            values:
+              - hybrid
   unmanagedPodWatcher:
     restart: false
-  replicas: 1
 bgpControlPlane:
   enabled: false
 k8sServiceHost: ${k8s_service_host}
@@ -26,3 +35,7 @@ enableEnvoyConfig: false
 envoy:
   enabled: false
 
+kubeProxyReplacement: true
+
+loadBalancer:
+  serviceTopology: true

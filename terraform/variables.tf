@@ -1,7 +1,7 @@
 variable "name" {
   description = "VPC, EKS Cluster name."
   type        = string
-  default     = "hybrid-nodes-demo"
+  default     = "hybrid-nodes-demo-pi"
 }
 
 variable "region" {
@@ -19,7 +19,7 @@ variable "vpc_cidr" {
 variable "eks_cluster_version" {
   description = "CIDR block for VPC"
   type    = string
-  default = "1.30"
+  default = "1.32"
 }
 
 variable "remote_node_cidr" {
