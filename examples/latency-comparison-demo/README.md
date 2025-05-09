@@ -43,7 +43,7 @@ echo "Access frontend at http://$PI_IP:30080"
 3. Adjust the test interval and artificial delay as needed
 4. Observe the real-time latency comparison chart and statistics
 
-![alt text](../../src/image.png)
+![alt text](../../src/latency.png)
 
 ## Customization
 

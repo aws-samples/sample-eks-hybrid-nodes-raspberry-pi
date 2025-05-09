@@ -53,8 +53,7 @@ Our goal is to showcase that setting up hybrid nodes doesn't need to be complex 
 
 ### Hardware Requirements
 - **Raspberry Pi 4** or **Raspberry Pi 5**
-  > **Note on EKS Version Compatibility:**
-  > - Should also work with any device running ARM but no guarantees
+  > Should also work with any device running ARM but no guarantees
 - Network connectivity (WiFi/Ethernet)
 - SSH access configured
 
@@ -97,7 +96,7 @@ git clone https://github.com/aws-samples/sample-eks-hybrid-nodes-raspberry-pi.gi
 > - Update in `terraform/variables.tf`
 > - However, need to be more than version 1.31
 >
-> **Network Configuration:**
+> **Network Configuration:**  
 > Before proceeding, check your node IP CIDR and update the `remote_node_cidr` in `terraform/variables.tf` accordingly. The default is set to `192.168.3.0/24`.
 
 ```bash
@@ -124,6 +123,7 @@ $(terraform output -raw eks_update_kubeconfig)
 - `SETUP_VPN.md`: Steps to setup Wireguard on vpn_server
 - `SETUP_NODE.md`: Steps to setup nodeadm on the on-prem device
 - `cilium-values.yaml`: Config file used to setup Cilium
+- `karpenter.yaml`: EC2 Nodeclass and Nodepool configuration for Karpenter
 
 **Important Terraform Outputs:**
 - `eks_update_kubeconfig`: How to access cluster
