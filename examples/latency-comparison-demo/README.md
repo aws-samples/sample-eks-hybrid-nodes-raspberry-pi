@@ -16,13 +16,17 @@ The demo consists of:
 - Docker and container registry access (e.g., ECR) for building and pushing images
 
 ## Deployment
+If still in the terraform folder:
+```bash
+cd ../examples/latency-comparison-demo
+```
 
 ```bash
 # Apply Kubernetes manifests
 kubectl apply -f namespace.yaml
 kubectl apply -f pi-api.yaml
 kubectl apply -f cloud-api.yaml
-kubectl wait --for=condition=available deployment/api-cloud -n latency-demo --timeout=60s
+kubectl wait --for=condition=available deployment/api-cloud -n latency-demo --timeout=120s
 kubectl apply -f frontend.yaml
 ```
 

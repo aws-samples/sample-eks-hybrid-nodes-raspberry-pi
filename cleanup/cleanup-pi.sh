@@ -28,6 +28,7 @@ echo "Removing binaries..."
 sudo rm -f /usr/bin/nodeadm
 sudo rm -f /usr/bin/kubelet
 sudo rm -f /usr/bin/kubectl
+rm amazon-ssm-agent.deb
 
 # Remove containerd
 echo "Removing containerd..."

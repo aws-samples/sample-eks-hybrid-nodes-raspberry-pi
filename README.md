@@ -53,7 +53,7 @@ Our goal is to showcase that setting up hybrid nodes doesn't need to be complex 
 
 ### Hardware Requirements
 - **Raspberry Pi 4** or **Raspberry Pi 5**
-  > Should also work with any device running ARM but no guarantees
+  > Should also work with devices running ARM but no guarantees
 - Network connectivity (WiFi/Ethernet)
 - SSH access configured
 
@@ -100,6 +100,8 @@ git clone https://github.com/aws-samples/sample-eks-hybrid-nodes-raspberry-pi.gi
 > Before proceeding, check your node IP CIDR and update the `remote_node_cidr` in `terraform/variables.tf` accordingly. The default is set to `192.168.3.0/24`.
 
 ```bash
+export KUBE_CONFIG_PATH=~/.kube/config
+
 # Deploy AWS infrastructure using Terraform
 cd terraform
 
@@ -152,7 +154,7 @@ We setup Wireguard by installing the Wireguard server on an EC2 instance running
 
 **Step 1:** Review the Wireguard setup instructions in the SETUP_VPN.md file that was generated in your terraform directory.
 ```bash
-cat SETUP_VPN.md
+cat generated-files/SETUP_VPN.md
 ```
 
 **Step 2:** Get the VPN server's public IP address using Terraform
@@ -207,8 +209,8 @@ Address = 10.200.0.2/24
 PublicKey = <public.key>
 # Your EC2 instance's public IP
 Endpoint = <ec2-public-ip>:51820
-# AWS VPC CIDR and WireGuard server network
-AllowedIPs = 10.200.0.1/24,10.0.0.0/24
+# WireGuard server network, AWS VPC CIDR & EKS Service CIDR
+AllowedIPs = 10.200.0.1/24,10.0.0.0/24,172.16.0.0/16
 PersistentKeepalive = 25
 ```
 
@@ -412,14 +414,14 @@ This demo showcases how to effectively distribute workloads between edge devices
 ### 1. Remove Node from Cluster
 ```bash
 # Get node name
-kubectl get nodes
-
-# Drain and delete node
-kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data
-kubectl delete node <node-name>
+HYBRID_NODE=$(kubectl get nodes -l eks.amazonaws.com/compute-type=hybrid -o jsonpath='{.items[0].metadata.name}')
 
 # Uninstall Cilium
 helm uninstall cilium -n kube-system
+
+# Drain and delete node
+kubectl drain $HYBRID_NODE --ignore-daemonsets
+kubectl delete node $HYBRID_NODE
 ```
 
 ### 2. Clean up Raspberry Pi
@@ -427,7 +429,6 @@ Use the `cleanup-pi.sh` script in the cleanup folder to remove Hybrid Node and W
 
 ### 3. Destroy Cluster
 ```bash
-terraform init
 terraform destroy --auto-approve
 ```
 

@@ -65,6 +65,10 @@ graph TD
 - Access to a container registry (e.g., local registry on Pi)
 
 ## Setup Process
+If still in the terraform folder:
+```bash
+cd ../examples/hybrid-processing-pipeline-demo
+```
 
 ### 1. Create Namespace
 ```bash
@@ -80,6 +84,9 @@ kubectl apply -f data-generator.yaml
 kubectl apply -f data-processor.yaml
 
 # Dashboard (on Pi)
+kubectl wait --for=condition=available deployment/redis -n hybrid-pipeline-demo --timeout=120s
+kubectl wait --for=condition=available deployment/data-generator -n hybrid-pipeline-demo --timeout=120s
+kubectl wait --for=condition=available deployment/data-processor -n hybrid-pipeline-demo --timeout=120s
 kubectl apply -f dashboard.yaml
 ```
 
