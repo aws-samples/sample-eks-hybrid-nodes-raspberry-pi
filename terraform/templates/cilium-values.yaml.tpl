@@ -39,3 +39,5 @@ kubeProxyReplacement: true
 
 loadBalancer:
   serviceTopology: true
+
+MTU: 1420

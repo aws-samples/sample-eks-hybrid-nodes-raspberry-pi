@@ -21,7 +21,7 @@ sudo cat /etc/wireguard/client-private.key | wg pubkey | sudo tee /etc/wireguard
 sudo bash -c 'private_key=$(cat /etc/wireguard/private.key); cat > /etc/wireguard/wg0.conf << EOF
 [Interface]
 PrivateKey = $private_key
-Address = 10.200.0.1/24
+Address = 10.130.128.1/17
 ListenPort = 51820
 SaveConfig = true
 EOF'
@@ -50,6 +50,7 @@ sudo ip route add ${remote_pod_cidr} dev wg0
 - Add peer to wg0
 ```
 sudo wg set wg0 peer $(sudo cat /etc/wireguard/client-public.key) allowed-ips 0.0.0.0/0
+sudo ip link set dev wg0 mtu 1420
 ```
 
 - Create connection from the client

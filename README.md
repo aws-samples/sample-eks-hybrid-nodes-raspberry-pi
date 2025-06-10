@@ -1,103 +1,6 @@
-# EKS Hybrid Nodes on Raspberry Pi
-
-## Table of Contents
-- [Introduction](#introduction)
-- [Architecture](#architecture)
-- [Prerequisites](#prerequisites)
-  - [Hardware Requirements](#hardware-requirements)
-  - [Software Requirements](#software-requirements)
-- [Getting Started](#getting-started)
-- [Setup Process](#setup-process)
-  - [1. AWS Infrastructure Setup](#1-aws-infrastructure-setup)
-  - [2. Raspberry Pi Setup](#2-raspberry-pi-setup)
-  - [3. Setup CNI](#3-setup-cni)
-- [Verification](#verification)
-- [Clean Up](#clean-up)
-- [Disclaimer](#disclaimer)
-- [Contributing](#contributing)
-- [License](#license)
-
----
-
-## Introduction
-
-Amazon EKS Hybrid Nodes is a powerful feature that enables you to extend your Amazon EKS clusters to include on-premises and edge infrastructure as worker nodes. This means you can:
-
-✨ Run Kubernetes workloads on your own hardware while AWS manages the control plane  
-✨ Unify Kubernetes management across cloud and on-premises environments  
-✨ Leverage AWS services and EKS features with your on-premises nodes  
-✨ Pay only for the vCPU resources of your hybrid nodes when they're attached to EKS clusters  
-
-This repository demonstrates how to implement EKS Hybrid Nodes using one of the most accessible and cost-effective platforms available - the Raspberry Pi. By following this guide, you'll learn how to:
-
-1. Transform a Raspberry Pi into an EKS hybrid node
-2. Connect it securely to your EKS cluster
-3. Deploy and manage workloads across your hybrid infrastructure
-
-Our goal is to showcase that setting up hybrid nodes doesn't need to be complex or expensive. This implementation serves as an excellent starting point for learning about EKS Hybrid Nodes or prototyping hybrid scenarios before deploying to production environments.
-
----
-
-## Architecture
-
-![Architecture Diagram](src/archi.png)
-
-> **Important Note on Network Architecture:**
-> - The EKS cluster is configured with public endpoint access only
-> - Raspberry Pi → EKS control plane communication flows through the internet via the public endpoint
-> - EKS control plane → Raspberry Pi communication is established through the VPN tunnel
-
----
-
-## Prerequisites
-
-### Hardware Requirements
-- **Raspberry Pi 4** or **Raspberry Pi 5**
-  > Should also work with devices running ARM but no guarantees
-- Network connectivity (WiFi/Ethernet)
-- SSH access configured
-
-### Software Requirements
-> Ensure you have the following tools installed:
-- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html)
-- [Session Manager plugin for AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
-- [kubectl](https://kubernetes.io/docs/tasks/tools/)
-- [terraform](https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli)
-
-> **Important IAM Requirements:**
-> - An IAM role named `Admin` must exist in your AWS account
-> - This role will be granted cluster admin permissions through the `AmazonEKSClusterAdminPolicy`
-> - If you want to use a different role name, modify the `principal_arn` in `terraform/eks.tf`
-
----
+# Setting up GPU Instance as Hybrid Node
 
 ## Getting Started
-
-Clone the repository:
-```bash
-git clone https://github.com/aws-samples/sample-eks-hybrid-nodes-raspberry-pi.git
-```
-
----
-
-## Setup Process
-
-### 1. AWS Infrastructure Setup
-
-> **Important Configuration Notes:**
-> 
-> **Region Selection:**
-> This demo uses the `ap-southeast-1` (Singapore) region by default. To use a different region:
-> 1. Open `terraform/variables.tf`
-> 2. Locate the `region` variable
-> 3. Change the default value to your desired AWS region (e.g., `us-west-2`, `eu-west-1`)
->
-> **EKS Version:**
-> - Update in `terraform/variables.tf`
-> - However, need to be more than version 1.31
->
-> **Network Configuration:**  
-> Before proceeding, check your node IP CIDR and update the `remote_node_cidr` in `terraform/variables.tf` accordingly. The default is set to `192.168.3.0/24`.
 
 ```bash
 export KUBE_CONFIG_PATH=~/.kube/config
@@ -110,26 +13,6 @@ terraform apply --auto-approve
 
 $(terraform output -raw eks_update_kubeconfig)
 ```
-
-> **Note on Admin Access:** If you encounter permission errors and don't have an Admin role, you can remove the admin access configuration:
-> ```bash
-> # Remove admin access configuration from eks.tf
-> sed -i '29,39d' eks.tf
-> 
-> # Reapply terraform to update the configuration
-> terraform apply --auto-approve
-> ```
-> This will use only the cluster creator permissions, which are sufficient if you created the cluster yourself.
-
-**Terraform Output Files:**
-- `SETUP_VPN.md`: Steps to setup Wireguard on vpn_server
-- `SETUP_NODE.md`: Steps to setup nodeadm on the on-prem device
-- `cilium-values.yaml`: Config file used to setup Cilium
-- `karpenter.yaml`: EC2 Nodeclass and Nodepool configuration for Karpenter
-
-**Important Terraform Outputs:**
-- `eks_update_kubeconfig`: How to access cluster
-- `connect_vpn_server`: How to connect to vpn_server using SSM
 
 #### Setup Karpenter and Kube Proxy
 
@@ -185,7 +68,9 @@ cat /etc/wireguard/client-private.key
 
 ---
 
-### 2. Raspberry Pi Setup
+### 2. GPU Setup  
+
+GCP Instance [us-west-1b] --> CIDR: 172.16.0.0/20 --> g2-standard-16 + Debian GNU/Linux 12 (bookworm)
 
 1. **Install Wireguard:**
 ```bash
@@ -202,7 +87,7 @@ Add the following configuration (replace placeholders):
 ```ini
 [Interface]
 PrivateKey = <client-private.key>
-Address = 10.200.0.2/24
+Address = 10.130.128.2/17
 
 [Peer]
 # Public key from AWS server (/etc/wireguard/public.key)
@@ -210,14 +95,9 @@ PublicKey = <public.key>
 # Your EC2 instance's public IP
 Endpoint = <ec2-public-ip>:51820
 # WireGuard server network, AWS VPC CIDR & EKS Service CIDR
-AllowedIPs = 10.200.0.1/24,10.0.0.0/24,172.16.0.0/16
+AllowedIPs = 10.130.128.1/17,10.129.0.0/16,10.128.0.0/16
 PersistentKeepalive = 25
 ```
-
-> **Important:** Replace the following:
-> - `<client-private.key>` with the client-private.key from VPN Server
-> - `<public.key>` with the public.key from VPN Server
-> - `<ec2-public-ip>` with VPN Server's Public IP
 
 3. **Enable and Start Wireguard:**
 ```bash
@@ -229,6 +109,8 @@ sudo systemctl start wg-quick@wg0
 
 # Verify connection
 sudo wg show
+
+sudo ip link set dev wg0 mtu 1420
 ```
 
 4. **Complete Node Setup:**
@@ -237,9 +119,11 @@ sudo wg show
 cat SETUP_NODE.md
 ```
 
-> **Troubleshooting:** If you encounter issues, refer to the [official troubleshooting guide](https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-troubleshooting.html).
->
-> ⚠️ **Common Issue:** If you get `ExpiredTokenException: The security token included in the request is expired`, the SSM Hybrid Activation Credentials have expired. Rerun `terraform init` & `terraform apply` and restart the `SETUP_NODE.md` steps.
+5. **Setup Driver Plugin**
+```bash
+sudo nvidia-ctk runtime configure --runtime=containerd --nvidia-set-as-default
+sudo systemctl restart containerd kubelet
+```
 
 ---
 
@@ -386,65 +270,3 @@ kubectl get pods -A
 
 🎉 **Congratulations!** Your Raspberry Pi is now a Hybrid Node in your EKS Cluster.
 
----
-
-## Deploy Demo Application
-
-After your hybrid node is successfully connected, you can try our demo applications:
-
-### 1. Latency Comparison Demo
-Try our [latency comparison demo](examples/latency-comparison-demo/README.md) which showcases the latency differences between pods running on AWS EKS cloud nodes versus pods running on Raspberry Pi hybrid nodes.
-
-### 2. Hybrid Processing Pipeline Demo
-Experience a real-world IoT scenario with our [hybrid processing pipeline demo](examples/hybrid-processing-pipeline-demo/README.md) that demonstrates:
-- Data generation at the edge (Raspberry Pi)
-- Cloud-based processing with Redis
-- Real-time visualization dashboard
-- Anomaly detection and statistical analysis
-
-This demo showcases how to effectively distribute workloads between edge devices and the cloud, with:
-- Edge-based data generation on the Pi
-- Cloud-based data processing for heavy computations
-- Real-time monitoring and visualization
-- Hybrid architecture leveraging both Pi and cloud resources
-
-
-## Clean Up
-
-### 1. Remove Node from Cluster
-```bash
-# Get node name
-HYBRID_NODE=$(kubectl get nodes -l eks.amazonaws.com/compute-type=hybrid -o jsonpath='{.items[0].metadata.name}')
-
-# Uninstall Cilium
-helm uninstall cilium -n kube-system
-
-# Drain and delete node
-kubectl drain $HYBRID_NODE --ignore-daemonsets
-kubectl delete node $HYBRID_NODE
-```
-
-### 2. Clean up Raspberry Pi
-Use the `cleanup-pi.sh` script in the cleanup folder to remove Hybrid Node and Wireguard configuration.
-
-### 3. Destroy Cluster
-```bash
-terraform destroy --auto-approve
-```
-
----
-
-## Disclaimer
-
-⚠️ **This repository is intended for demonstration and learning purposes only.**
-It is **not** intended for production use. The code provided here is for educational purposes and should not be used in a live environment without proper testing, validation, and modifications.
-
-Use at your own risk. The authors are not responsible for any issues, damages, or losses that may result from using this code in production.
-
-## Contributing
-
-Contributions welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
-
-## License
-
-This project is licensed under the MIT License - see [LICENSE](LICENSE) file.

@@ -79,3 +79,36 @@ module "eks_blueprints_addons" {
     ]
   }
 }
+
+module "data_addons" {
+  source  = "aws-ia/eks-data-addons/aws"
+  version = "~> 1.33.0" # ensure to update this to the latest/desired version
+
+  oidc_provider_arn = module.eks.oidc_provider_arn
+
+  enable_nvidia_device_plugin = true
+  nvidia_device_plugin_helm_config = {
+    version =  "v0.16.1"
+    name    = "nvidia-device-plugin"
+    values = [
+      <<-EOT
+        gfd:
+          enabled: true
+        nfd:
+          master:
+            tolerations:
+              - key: "karpenter.sh/controller"
+                operator: "Exists"
+                effect: "NoSchedule"
+              - key: "test"
+                effect: "NoSchedule"
+          worker:
+            tolerations:
+              - key: nvidia.com/gpu
+                operator: Exists
+                effect: NoSchedule
+              - operator: "Exists"
+      EOT
+    ]
+  }
+}

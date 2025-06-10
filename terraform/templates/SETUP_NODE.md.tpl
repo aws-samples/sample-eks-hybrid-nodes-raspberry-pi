@@ -1,4 +1,4 @@
-### Setup Raspberry Pi
+### Setup Node 
 
 - Install tools
 ```
@@ -6,14 +6,7 @@ sudo su ubuntu
 cd ~
 
 sudo snap install aws-cli --classic
-
-sudo snap remove amazon-ssm-agent
-wget https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_arm64/amazon-ssm-agent.deb
-sudo dpkg -i amazon-ssm-agent.deb
-sudo systemctl enable amazon-ssm-agent
-sudo systemctl start amazon-ssm-agent
-
-curl -OL 'https://hybrid-assets.eks.amazonaws.com/releases/latest/bin/linux/arm64/nodeadm'
+curl -OL 'https://hybrid-assets.eks.amazonaws.com/releases/latest/bin/linux/amd64/nodeadm'
 sudo mv nodeadm /usr/bin/nodeadm
 sudo chmod +x /usr/bin/nodeadm
 ```
@@ -30,6 +23,7 @@ spec:
   kubelet:
     flags:
       - --node-labels=topology.kubernetes.io/zone=onprem
+      - --resolv-conf=/run/systemd/resolve/resolv.conf
   hybrid: 
     ssm:
       activationCode: ${activation_code}
@@ -39,9 +33,7 @@ EOF
 
 - Setup Node
 ```
-sudo nodeadm install ${version} --credential-provider ssm
+sudo nodeadm install 1.32 --credential-provider ssm
 sudo nodeadm init -c file://nodeConfig.yaml
 sudo systemctl daemon-reload
-export KUBECONFIG=/var/lib/kubelet/kubeconfig
 ```
-If there is a DescribeCluster error, just rerun the above code chunk again.

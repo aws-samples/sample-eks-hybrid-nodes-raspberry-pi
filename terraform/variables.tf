@@ -13,7 +13,7 @@ variable "region" {
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
-  default     = "10.0.0.0/24"
+  default     = "10.129.0.0/16"
 }
 
 variable "eks_cluster_version" {
@@ -25,11 +25,17 @@ variable "eks_cluster_version" {
 variable "remote_node_cidr" {
   description = "CIDR for on-prem hybrid nodes"
   type    = string
-  default = "192.168.3.0/24"
+  default = "172.16.0.0/20"
 }
 
 variable "remote_pod_cidr" {
   description = "CIDR for on-prem hybrid pods"
   type    = string
-  default = "192.168.5.0/24"
+  default = "10.130.0.0/17"
+}
+
+variable "cluster_service_ipv4_cidr" {
+  description = "CIDR for EKS Service"
+  type    = string
+  default = "10.128.0.0/16"
 }
