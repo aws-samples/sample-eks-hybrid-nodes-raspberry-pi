@@ -70,7 +70,7 @@ cat /etc/wireguard/client-private.key
 
 ### 2. GPU Setup  
 
-GCP Instance [us-west-1b] --> CIDR: 172.16.0.0/20 --> g2-standard-16 + Debian GNU/Linux 12 (bookworm)
+GCP Instance [us-west-1a] --> CIDR: 172.16.0.0/20 --> g2-standard-16 + Debian GNU/Linux 12 (bookworm)
 
 1. **Install Wireguard:**
 ```bash
