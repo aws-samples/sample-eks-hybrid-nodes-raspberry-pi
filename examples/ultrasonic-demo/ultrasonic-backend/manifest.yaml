@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eks-dynamo-writer-sa
+  namespace: default
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ultrasonic-config
+  namespace: default
+data:
+  table-name: eks-timeseries
+  write-interval: "60"
+  dynamo-region: "eu-west-2"
+  sampling-interval: "20"
+  pin-trigger: "4"
+  pin-echo: "17"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ultrasonic-sensor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ultrasonic-sensor
+  template:
+    metadata:
+      labels:
+        app: ultrasonic-sensor
+    spec:
+      serviceAccountName: eks-dynamo-writer-sa
+      containers:
+      - name: ultrasonic
+        image: <your_backend_image_name>
+        env:
+        - name: TABLE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: ultrasonic-config
+              key: table-name
+        - name: WRITE_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: ultrasonic-config
+              key: write-interval
+        - name: DYNAMO_REGION
+          valueFrom:
+            configMapKeyRef:
+              name: ultrasonic-config
+              key: dynamo-region
+        - name: SAMPLING_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: ultrasonic-config
+              key: sampling-interval
+        - name: PIN_TRIGGER
+          valueFrom:
+            configMapKeyRef:
+              name: ultrasonic-config
+              key: pin-trigger
+        - name: PIN_ECHO
+          valueFrom:
+            configMapKeyRef:
+              name: ultrasonic-config
+              key: pin-echo
+        resources:
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
+          requests:
+            cpu: "100m"
+            memory: "64Mi"
+        securityContext:
+          privileged: true
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import os; exit(0 if os.path.exists('/dev/gpiochip0') else 1)"
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: gpio
+          mountPath: /dev/gpiochip0
+      volumes:
+      - name: gpio
+        hostPath:
+          path: /dev/gpiochip0
+          type: CharDevice
