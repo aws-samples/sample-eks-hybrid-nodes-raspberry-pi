@@ -1,0 +1,129 @@
+# Ultrasonic Dashboard Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ultrasonic-dashboard
+  namespace: default
+  labels:
+    app: ultrasonic-dashboard
+    component: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ultrasonic-dashboard
+  template:
+    metadata:
+      labels:
+        app: ultrasonic-dashboard
+        component: frontend
+    spec:
+      serviceAccountName: eks-dynamo-writer-sa
+      containers:
+      - name: dashboard
+        image: <your_frontend_image_name>:<tag>
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: http
+        env:
+        - name: TABLE_NAME
+          value: "eks-timeseries"
+        - name: DYNAMO_REGION
+          value: "eu-west-1"
+        - name: FLASK_ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 2
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 30
+---
+# Dashboard Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ultrasonic-dashboard-service
+  namespace: default
+  labels:
+    app: ultrasonic-dashboard
+    component: frontend
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "80"
+    prometheus.io/path: "/health"
+spec:
+  selector:
+    app: ultrasonic-dashboard
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30090
+    name: http
+    protocol: TCP
+---
+# ConfigMap for dashboard configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ultrasonic-dashboard-config
+  namespace: default
+data:
+  table-name: "eks-timeseries"
+  dynamo-region: "eu-west-1"
+  update-interval: "5"
+  chart-max-points: "1000"
+---
+# Optional: Ingress for external access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ultrasonic-dashboard-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+spec:
+  rules:
+  - host: ultrasonic-dashboard.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ultrasonic-dashboard-service
+            port:
+              number: 80
