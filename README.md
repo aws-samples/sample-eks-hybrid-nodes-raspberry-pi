@@ -408,6 +408,20 @@ This demo showcases how to effectively distribute workloads between edge devices
 - Real-time monitoring and visualization
 - Hybrid architecture leveraging both Pi and cloud resources
 
+### 3. Ultrasonic Sensor Demo
+Explore real-time IoT sensor monitoring with our [ultrasonic sensor demo](examples/ultrasonic-demo/README.md) that demonstrates:
+- Physical sensor integration with HC-SR04 ultrasonic sensor
+- Edge-based sensor data collection and processing
+- Cloud storage with DynamoDB time-series data
+- Professional web dashboard with real-time visualization
+- Statistical analysis and anomaly detection
+
+This demo illustrates practical IoT applications and hybrid architecture benefits:
+- Real-time sensor processing at the edge for low latency
+- Cloud persistence for data analytics and historical trends
+- Modern dashboard with animated gauges and interactive charts
+- Hardware integration showing tangible edge computing benefits
+
 
 ## Clean Up
 
