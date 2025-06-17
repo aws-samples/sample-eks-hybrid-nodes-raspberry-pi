@@ -30,7 +30,7 @@ spec:
         - name: TABLE_NAME
           value: "eks-timeseries"
         - name: DYNAMO_REGION
-          value: "eu-west-1"
+          value: "ap-southeast-1"
         - name: FLASK_ENV
           value: "production"
         resources:
@@ -100,7 +100,7 @@ metadata:
   namespace: default
 data:
   table-name: "eks-timeseries"
-  dynamo-region: "eu-west-1"
+  dynamo-region: "ap-southeast-1"
   update-interval: "5"
   chart-max-points: "1000"
 ---

@@ -1,114 +1,270 @@
-# Ultrasonic Sensor Demo for EKS Hybrid Nodes
+# EKS Hybrid Nodes Ultrasonic Sensor Demo
 
-This demo showcases how to deploy an ultrasonic distance sensor application on EKS Hybrid Nodes running on Raspberry Pi. The application consists of a backend service that reads sensor data and stores it in DynamoDB, and a frontend dashboard for visualization.
+This demo showcases real-time IoT sensor monitoring using Amazon EKS with Raspberry Pi hybrid nodes. It demonstrates edge-based sensor data collection with cloud storage and visualization, representing a common manufacturing and IoT use case.
+
+## Overview
+
+The demo consists of:
+
+1. **Ultrasonic Sensor**: Reads distance measurements from HC-SR04 sensor on Raspberry Pi
+2. **Dashboard**: Web-based visualization interface for real-time and historical data
+3. **DynamoDB Storage**: Time-series data storage in AWS cloud
 
 ## Architecture
 
-- **Backend**: Python service running on Raspberry Pi that reads data from an ultrasonic sensor and writes to DynamoDB
-- **Frontend**: Flask web application that retrieves and visualizes the sensor data
+```mermaid
+graph TD
+    subgraph "Raspberry Pi (Edge)"
+        A[HC-SR04 Sensor] -->|GPIO| B[Ultrasonic Backend]
+        E[Dashboard UI] -->|Displays| F[Real-time Data]
+    end
+    
+    subgraph "AWS Cloud"
+        C[DynamoDB Table] -->|Time-series Data| D[Analytics]
+    end
+    
+    B -->|Writes measurements| C
+    C -->|Reads data| E
+```
+
+## Why Edge Computing?
+
+This demo illustrates edge computing benefits:
+- **Low-latency response**: Real-time sensor processing at the edge
+- **Reduced bandwidth**: Local processing before cloud transmission
+- **Reliability**: Local operation continues during connectivity issues
+- **Cost optimization**: Edge processing reduces cloud compute costs
+
+## Components
+
+### 1. Ultrasonic Backend (Pi)
+- Reads HC-SR04 ultrasonic sensor via GPIO pins
+- Processes distance measurements locally
+- Writes time-series data to DynamoDB
+- Runs as privileged container with GPIO access
+
+### 2. Dashboard Frontend (Pi)
+- Flask web application with real-time visualization
+- Interactive charts showing current and historical data
+- Performance statistics and activity monitoring
+- Modern responsive UI with animated components
+
+### 3. DynamoDB Storage (Cloud)
+- Time-series table with efficient date-based partitioning
+- Schema: Partition key (yyyymmdd), Sort key (hhmmss)
+- Optimized for time-based queries and analytics
 
 ## Prerequisites
 
-- EKS cluster with hybrid nodes configured (follow the main repository setup instructions)
-- Raspberry Pi with an ultrasonic sensor connected (HC-SR04 or similar)
-- AWS DynamoDB table named `eks-timeseries` (or update the environment variable)
-- AWS IAM permissions for DynamoDB access
+- EKS cluster with both cloud nodes and Raspberry Pi hybrid nodes
+- `kubectl` configured to access your cluster
+- **Hardware Requirements**:
+  - HC-SR04 Ultrasonic Sensor
+  - 1kΩ and 2kΩ Resistors (voltage divider)
+  - Jumper wires and breadboard
+- Docker and container registry access for building images
 
-## Setup Instructions
+## Hardware Setup
 
-### 1. Build and Deploy the Backend Service
+**Connections**:
+- VCC → Pi 3.3V
+- GND → Pi GND  
+- TRIG → GPIO 4
+- ECHO → Voltage divider → GPIO 17
+
+*Note: Use voltage divider (1kΩ and 2kΩ resistors) to reduce 5V ECHO signal to safe 3.3V for Pi GPIO input.*
+
+## Building Images
+
+### Step 1: Setup ECR Repository
+
+First, get your ECR public registry alias:
 
 ```bash
-# Navigate to the backend directory
+# Get your ECR public registry alias
+ECR_ALIAS=$(aws ecr-public describe-registries --region us-east-1 --query 'registries[0].aliases[0].name' --output text)
+echo "Your ECR alias is: $ECR_ALIAS"
+```
+
+### Step 2: Create Repository
+
+Create a new ECR repository for the ultrasonic demo:
+
+```bash
+# Create ECR repository for the ultrasonic demo
+aws ecr-public create-repository --repository-name eks-hybrid-ultrasonic-demo --region us-east-1
+```
+
+### Step 3: Authenticate Docker
+
+Authenticate Docker to your ECR registry:
+
+```bash
+# Get login token and authenticate Docker to ECR
+aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+```
+
+### Step 4: Build Backend Image
+
+Build and push the backend sensor application:
+
+```bash
+# Build and push backend image
 cd ultrasonic-backend
-
-# Build the Docker image
-docker build . -t <your_backend_image_name>:latest
-
-# Push the image to your repository
-docker push <your_backend_image_name>:latest
-
-# Update the manifest.yaml with your image repository
-# Replace <your_backend_image_name> with your actual image repository
+docker build -t public.ecr.aws/$ECR_ALIAS/eks-hybrid-ultrasonic-demo:backend .
+docker push public.ecr.aws/$ECR_ALIAS/eks-hybrid-ultrasonic-demo:backend
 ```
 
-### 2. Build and Deploy the Frontend Service
+### Step 5: Build Frontend Image
+
+Build and push the frontend dashboard:
 
 ```bash
-# Navigate to the frontend directory
-cd ultrasonic-frontend
-
-# Build the Docker image
-docker build . -t <your_frontend_image_name>:latest
-
-# Push the image to your repository
-docker push <your_frontend_image_name>:latest
-
-# Update the manifest.yaml with your image repository
-# Replace <your_frontend_image_name> with your actual image repository
+# Build and push frontend image  
+cd ../ultrasonic-frontend
+docker build -t public.ecr.aws/$ECR_ALIAS/eks-hybrid-ultrasonic-demo:frontend .
+docker push public.ecr.aws/$ECR_ALIAS/eks-hybrid-ultrasonic-demo:frontend
 ```
 
-### 3. Create a Public ECR Repository (Optional)
+### Step 6: Update Manifests
 
-If you don't have a container registry, you can create a public ECR repository:
-
-1. Open the Amazon ECR console at https://console.aws.amazon.com/ecr/
-2. Choose your preferred region from the navigation bar
-3. Select "Public repositories" from the left navigation pane
-4. Click "Create repository"
-5. Enter a repository name (e.g., "eks-hybrid-ultrasonic-demo")
-6. Add optional tags if desired
-7. Click "Create repository"
-8. Follow the "View push commands" instructions to authenticate and push your images
-
-### 4. Deploy the Application
-
-After building and pushing your images:
+Update the Kubernetes manifests with your built images and region:
 
 ```bash
-# Deploy the backend (runs on the Raspberry Pi hybrid node)
+# Get the region from terraform variables
+AWS_REGION=$(grep -A 1 'variable "region"' ../../terraform/variables.tf | grep 'default' | cut -d'"' -f4)
+
+# Update manifest files with your built images
+sed -i "s|<your_backend_image_name>|public.ecr.aws/$ECR_ALIAS/eks-hybrid-ultrasonic-demo:backend|g" ../ultrasonic-backend/manifest.yaml
+sed -i "s|<your_frontend_image_name>:<tag>|public.ecr.aws/$ECR_ALIAS/eks-hybrid-ultrasonic-demo:frontend|g" ../ultrasonic-frontend/dashboard.yaml
+
+# Update region in manifest files
+sed -i "s|dynamo-region: \"ap-southeast-1\"|dynamo-region: \"$AWS_REGION\"|g" ../ultrasonic-backend/manifest.yaml
+sed -i "s|value: \"ap-southeast-1\"|value: \"$AWS_REGION\"|g" ../ultrasonic-frontend/dashboard.yaml
+sed -i "s|dynamo-region: \"ap-southeast-1\"|dynamo-region: \"$AWS_REGION\"|g" ../ultrasonic-frontend/dashboard.yaml
+```
+
+## Setup Process
+
+If still in the terraform folder:
+```bash
+cd ../examples/ultrasonic-demo
+```
+
+### 1. Create DynamoDB Table
+
+Create the DynamoDB table for storing time-series sensor data:
+
+```bash
+# Get the region from terraform variables
+AWS_REGION=$(grep -A 1 'variable "region"' ../../terraform/variables.tf | grep 'default' | cut -d'"' -f4)
+
+# Create DynamoDB table with date-based partitioning
+aws dynamodb create-table \
+    --table-name eks-timeseries \
+    --attribute-definitions \
+        AttributeName=yyyymmdd,AttributeType=S \
+        AttributeName=hhmmss,AttributeType=S \
+    --key-schema \
+        AttributeName=yyyymmdd,KeyType=HASH \
+        AttributeName=hhmmss,KeyType=RANGE \
+    --billing-mode PAY_PER_REQUEST \
+    --region $AWS_REGION
+
+# Verify table creation
+aws dynamodb describe-table --table-name eks-timeseries --region $AWS_REGION
+```
+
+### 2. Deploy Backend Sensor Application
+
+```bash
+# Deploy the ultrasonic sensor backend
 kubectl apply -f ultrasonic-backend/manifest.yaml
 
-# Deploy the frontend and dashboard
-kubectl apply -f ultrasonic-frontend/dashboard.yaml
+# Verify deployment
+kubectl get pods -l app=ultrasonic-sensor
+kubectl logs -f deployment/ultrasonic-sensor
 ```
 
-## Accessing the Dashboard
-
-Once deployed, you can access the dashboard using:
+### 3. Deploy Frontend Dashboard
 
 ```bash
-# Get the LoadBalancer URL for the frontend service
-kubectl get svc ultrasonic-frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+# Deploy the dashboard
+kubectl apply -f ultrasonic-frontend/dashboard.yaml
+
+# Wait for deployment
+kubectl wait --for=condition=available deployment/ultrasonic-dashboard --timeout=120s
 ```
 
-Navigate to this URL in your browser to view the ultrasonic sensor dashboard.
+## Access the Dashboard
 
-## Environment Variables
+The dashboard is exposed as a NodePort service on port 30090. Access it using your Raspberry Pi's IP address:
 
-### Backend Service
+```bash
+# Get Pi's IP
+HYBRID_NODE=$(kubectl get nodes -l eks.amazonaws.com/compute-type=hybrid -o jsonpath='{.items[0].metadata.name}')
+PI_IP=$(kubectl get nodes $HYBRID_NODE -o yaml | grep 'address: ' | head -1 | awk '{print $3}')
+echo "Access dashboard at http://$PI_IP:30090"
+```
+
+## Dashboard Features
+
+1. **Real-time Monitoring**
+   - Current distance readings with animated gauges
+   - Live sensor status and connection health
+   - Performance metrics and uptime statistics
+
+2. **Historical Analysis**
+   - Interactive time-series charts (1H, 6H, 24H views)
+   - Statistical analysis (min, max, average, range)
+   - Movement detection and stability metrics
+
+3. **Activity Feed**
+   - Real-time event logging
+   - Anomaly detection alerts
+   - System status updates
+
+## Configuration
+
+### Backend Environment Variables
 - `TABLE_NAME`: DynamoDB table name (default: "eks-timeseries")
-- `WRITE_INTERVAL`: Interval between writes to DynamoDB in seconds (default: 60)
-- `DYNAMO_REGION`: AWS region for DynamoDB (default: "eu-west-1")
-- `SAMPLING_INTERVAL`: Sensor sampling interval in seconds (default: 20)
-- `PIN_TRIGGER`: GPIO pin for ultrasonic sensor trigger (default: 4)
-- `PIN_ECHO`: GPIO pin for ultrasonic sensor echo (default: 17)
+- `WRITE_INTERVAL`: Write interval in seconds (default: 60)
+- `DYNAMO_REGION`: AWS region (dynamically set from terraform variables)
+- `SAMPLING_INTERVAL`: Sensor sampling interval (default: 20)
+- `PIN_TRIGGER`: GPIO trigger pin (default: 4)
+- `PIN_ECHO`: GPIO echo pin (default: 17)
 
-### Frontend Service
+### Frontend Environment Variables
 - `TABLE_NAME`: DynamoDB table name (default: "eks-timeseries")
-- `DYNAMO_REGION`: AWS region for DynamoDB (default: "eu-west-1")
+- `DYNAMO_REGION`: AWS region (dynamically set from terraform variables)
 
-## Troubleshooting
+## Cleanup
 
-- Ensure your Raspberry Pi has the necessary GPIO libraries installed
-- Verify that your IAM roles have appropriate permissions for DynamoDB
-- Check the pod logs for any errors: `kubectl logs -f <pod-name>`
-- Verify the ultrasonic sensor is properly connected to the specified GPIO pins
+```bash
+# Remove the deployments
+kubectl delete -f ultrasonic-backend/manifest.yaml
+kubectl delete -f ultrasonic-frontend/dashboard.yaml
 
-## Security Considerations
+# Get the region from terraform variables and remove DynamoDB table
+AWS_REGION=$(grep -A 1 'variable "region"' ../../terraform/variables.tf | grep 'default' | cut -d'"' -f4)
+aws dynamodb delete-table --table-name eks-timeseries --region $AWS_REGION
+```
 
-This demo uses environment variables for configuration. In a production environment, consider using AWS Secrets Manager or Parameter Store for sensitive configuration.
+## Understanding the Demo
 
-## License
+This demo illustrates key hybrid cloud-edge concepts:
 
-This project is licensed under the MIT License - see the LICENSE file at the root of this repository for details.
+1. **Edge Processing**: Sensor data is processed locally on the Pi, reducing latency and enabling real-time responses
+2. **Cloud Storage**: Time-series data is stored in DynamoDB for persistence and analytics
+3. **Hybrid Visualization**: Dashboard runs on the edge but accesses cloud data, demonstrating flexible deployment patterns
+4. **IoT Integration**: Real hardware sensor integration shows practical IoT applications
+5. **Kubernetes Native**: Uses standard Kubernetes patterns with ConfigMaps, ServiceAccounts, and health probes
+
+## Customization
+
+You can extend this demo by:
+- Adding multiple sensor types (temperature, humidity, etc.)
+- Implementing local alerting and threshold monitoring
+- Adding machine learning models for anomaly detection
+- Integrating with other AWS services (SNS, SQS, Lambda)
+- Scaling to multiple edge devices with centralized monitoring
