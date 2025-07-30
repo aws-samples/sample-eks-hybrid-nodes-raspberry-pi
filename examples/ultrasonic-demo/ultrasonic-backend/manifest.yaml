@@ -12,7 +12,7 @@ metadata:
 data:
   table-name: eks-timeseries
   write-interval: "60"
-  dynamo-region: "eu-west-2"
+  dynamo-region: "ap-southeast-1"
   sampling-interval: "20"
   pin-trigger: "4"
   pin-echo: "17"
