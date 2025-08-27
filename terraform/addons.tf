@@ -27,7 +27,16 @@ module "eks_blueprints_addons" {
         ]
       })
     }
-    eks-pod-identity-agent = {}
+    eks-pod-identity-agent = {
+      addon_version = "v1.3.4-eksbuild.1"
+      configuration_values = jsonencode({
+        daemonsets = {
+          hybrid = {
+            create = true
+          }
+        }
+      })
+    }
     # VPC CNI uses worker node IAM role policies and should only run on cloud nodes
     vpc-cni = {
       configuration_values = jsonencode({

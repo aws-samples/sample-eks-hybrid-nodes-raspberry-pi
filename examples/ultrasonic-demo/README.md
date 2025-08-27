@@ -58,27 +58,30 @@ This demo illustrates edge computing benefits:
 
 - EKS cluster with both cloud nodes and Raspberry Pi hybrid nodes
 - `kubectl` configured to access your cluster
-- **Hardware Requirements**:
+- **Hardware Requirements** (for real sensor setup):
   - HC-SR04 Ultrasonic Sensor
   - 1kΩ and 2kΩ Resistors (voltage divider)
   - Jumper wires and breadboard
 - Docker and container registry access for building images
+- **Architecture Support**: Images built with multi-architecture support for both AMD64 and ARM64 systems
 
-## Hardware Setup
 
-**Connections**:
-- VCC → Pi 3.3V
-- GND → Pi GND  
-- TRIG → GPIO 4
-- ECHO → Voltage divider → GPIO 17
+First, ensure Docker Buildx is available and create a multi-platform builder:
 
-*Note: Use voltage divider (1kΩ and 2kΩ resistors) to reduce 5V ECHO signal to safe 3.3V for Pi GPIO input.*
+```bash
+# Check if buildx is available
+docker buildx version
 
-## Building Images
+# Create and use a new builder instance for multi-platform builds
+docker buildx create --name multiarch-builder --use --bootstrap
 
-### Step 1: Setup ECR Repository
+# Verify the builder supports multiple platforms
+docker buildx inspect --bootstrap
+```
 
-First, get your ECR public registry alias:
+### Step 2: Setup ECR Repository
+
+Get your ECR public registry alias:
 
 ```bash
 # Get your ECR public registry alias
@@ -86,7 +89,7 @@ ECR_ALIAS=$(aws ecr-public describe-registries --region us-east-1 --query 'regis
 echo "Your ECR alias is: $ECR_ALIAS"
 ```
 
-### Step 2: Create Repository
+### Step 3: Create Repository
 
 Create a new ECR repository for the ultrasonic demo:
 
@@ -95,7 +98,7 @@ Create a new ECR repository for the ultrasonic demo:
 aws ecr-public create-repository --repository-name eks-hybrid-ultrasonic-demo --region us-east-1
 ```
 
-### Step 3: Authenticate Docker
+### Step 4: Authenticate Docker
 
 Authenticate Docker to your ECR registry:
 
@@ -104,35 +107,39 @@ Authenticate Docker to your ECR registry:
 aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 ```
 
-### Step 4: Build Backend Image
+### Step 5: Build Multi-Architecture Backend Image
 
-Build and push the backend sensor application:
+Build and push the backend sensor application for both AMD64 and ARM64:
 
 ```bash
-# Build and push backend image
+# Build and push multi-architecture backend image
 cd ultrasonic-backend
-docker build -t public.ecr.aws/$ECR_ALIAS/eks-hybrid-ultrasonic-demo:backend .
-docker push public.ecr.aws/$ECR_ALIAS/eks-hybrid-ultrasonic-demo:backend
+docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    --tag public.ecr.aws/$ECR_ALIAS/eks-hybrid-ultrasonic-demo:backend \
+    --push .
 ```
 
-### Step 5: Build Frontend Image
+### Step 6: Build Multi-Architecture Frontend Image
 
-Build and push the frontend dashboard:
+Build and push the frontend dashboard for both AMD64 and ARM64:
 
 ```bash
-# Build and push frontend image  
+# Build and push multi-architecture frontend image  
 cd ../ultrasonic-frontend
-docker build -t public.ecr.aws/$ECR_ALIAS/eks-hybrid-ultrasonic-demo:frontend .
-docker push public.ecr.aws/$ECR_ALIAS/eks-hybrid-ultrasonic-demo:frontend
+docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    --tag public.ecr.aws/$ECR_ALIAS/eks-hybrid-ultrasonic-demo:frontend \
+    --push .
 ```
 
-### Step 6: Update Manifests
+### Step 7: Update Manifests
 
 Update the Kubernetes manifests with your built images and region:
 
 ```bash
 # Get the region from terraform variables
-AWS_REGION=$(grep -A 1 'variable "region"' ../../terraform/variables.tf | grep 'default' | cut -d'"' -f4)
+AWS_REGION=$(grep -A 2 'variable "region"' ../../../terraform/variables.tf | grep 'default' | cut -d'"' -f2)
 
 # Update manifest files with your built images
 sed -i "s|<your_backend_image_name>|public.ecr.aws/$ECR_ALIAS/eks-hybrid-ultrasonic-demo:backend|g" ../ultrasonic-backend/manifest.yaml
@@ -157,7 +164,7 @@ Create the DynamoDB table for storing time-series sensor data:
 
 ```bash
 # Get the region from terraform variables
-AWS_REGION=$(grep -A 1 'variable "region"' ../../terraform/variables.tf | grep 'default' | cut -d'"' -f4)
+AWS_REGION=$(grep -A 2 'variable "region"' ../../terraform/variables.tf | grep 'default' | cut -d'"' -f2)
 
 # Create DynamoDB table with date-based partitioning
 aws dynamodb create-table \
