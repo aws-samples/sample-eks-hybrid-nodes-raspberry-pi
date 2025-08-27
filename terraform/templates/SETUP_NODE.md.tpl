@@ -31,6 +31,7 @@ spec:
     flags:
       - --node-labels=topology.kubernetes.io/zone=onprem
   hybrid: 
+    enableCredentialsFile: true
     ssm:
       activationCode: ${activation_code}
       activationId: ${activation_id}

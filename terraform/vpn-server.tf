@@ -68,6 +68,13 @@ module "ec2_instance" {
 
   # Disabled source destination checking --> needed for VPN/routing
   source_dest_check = false
+  # Enforce IMDSv2 for enhanced security
+  metadata_options = {
+    http_tokens                 = "required"  # Enforce IMDSv2 (session tokens required)
+    http_endpoint              = "enabled"    # Keep metadata service available
+    http_put_response_hop_limit = 1          # Restrict to direct access only
+    instance_metadata_tags     = "disabled"  # Disable tag access via metadata
+  }
 
   # Install and start SSM Agent
   user_data = <<-EOT
